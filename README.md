@@ -1,4 +1,4 @@
-# Boma Yetu AI Assistant
+# Boma Yetu AI Assistant Chatbot
 
 ## Project Overview
 
