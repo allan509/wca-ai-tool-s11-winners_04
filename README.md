@@ -1,2 +1,22 @@
-# wca-ai-tool-s11-winners_04
-An intelligent AI assistant for Boma Yetu Affordable Housing that uses Retrieval-Augmented Generation (RAG) and Large Language Models (LLMs) to provide accurate, context-aware responses based on official housing documents.
+# Boma Yetu AI Assistant
+
+## Project Overview
+
+The Boma Yetu AI Assistant is an intelligent chatbot that helps users access affordable housing information using Retrieval-Augmented Generation (RAG) and Large Language Models (LLMs).
+
+## Technologies
+
+- Python
+- Git & GitHub
+- RAG
+- ChromaDB
+- OpenAI API
+
+## Project Structure
+
+- src/ – Source code
+- data/pdfs/ – Knowledge documents
+- data/vector_db/ – Vector database
+- docs/ – Project documentation
+- tests/ – Unit tests
+- logs/ – Application logs
