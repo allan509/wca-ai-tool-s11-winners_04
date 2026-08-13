@@ -1,6 +1,4 @@
 """
-chatbot.py
-----------
 Core chatbot logic for the Boma Yetu AI Assistant.
 
 Current responsibilities:
@@ -17,10 +15,7 @@ the retrieval architecture.
 
 from src.vector_store import DocumentChunk
 
-
-# ============================================================
-# SYSTEM INSTRUCTIONS
-# ============================================================
+# System instructions
 
 SYSTEM_INSTRUCTIONS = """
 You are Boma Yetu AI Assistant.
@@ -39,10 +34,7 @@ Rules:
 5. When appropriate, mention the source of the information.
 """
 
-
-# ============================================================
-# INPUT VALIDATION
-# ============================================================
+# Input validation
 
 def validate_question(question: str) -> str:
     """
@@ -70,9 +62,7 @@ def validate_question(question: str) -> str:
     return question
 
 
-# ============================================================
-# CONTEXT FORMATTING
-# ============================================================
+# Context Formatting
 
 def format_context(
     documents: list[DocumentChunk],
@@ -123,10 +113,7 @@ def format_context(
 
     return "\n\n".join(context_parts)
 
-
-# ============================================================
-# PROMPT BUILDING
-# ============================================================
+# Prompt building
 
 def build_prompt(
     question: str,
@@ -163,9 +150,7 @@ def build_prompt(
     return prompt
 
 
-# ============================================================
-# RESPONSE FALLBACK
-# ============================================================
+# Response Fallback
 
 def no_context_response() -> str:
     """
