@@ -12,6 +12,11 @@ from src.chatbot import (
     SYSTEM_INSTRUCTIONS,
 )
 
+
+from src.chatbot import answer_from_knowledge
+from src.vector_store import VectorStore
+from src.pipeline import process_pdf
+
 from src.vector_store import DocumentChunk
 # Question validation
 
@@ -170,3 +175,51 @@ def test_no_context_response():
     assert isinstance(result, str)
     assert len(result) > 0
     assert "information" in result.lower()
+
+def test_answer_from_knowledge():
+    """Test retrieval and chatbot integration."""
+
+    store = VectorStore()
+
+    process_pdf(
+        "data/pdfs/About/test.pdf",
+        store,
+        document_id="TEST_DOC",
+        category="About",
+    )
+
+    response = answer_from_knowledge(
+        question="What is Boma Yangu?",
+        store=store,
+        top_k=3,
+    )
+
+    assert isinstance(response, str)
+    assert response.strip() != ""
+
+
+def test_answer_from_knowledge_invalid_question():
+    """Test that invalid questions are rejected."""
+
+    store = VectorStore()
+
+    with pytest.raises((ValueError, TypeError)):
+        answer_from_knowledge(
+            question="",
+            store=store,
+        )
+
+
+def test_answer_from_knowledge_no_results():
+    """Test chatbot behavior when nothing relevant is retrieved."""
+
+    store = VectorStore()
+
+    response = answer_from_knowledge(
+        question="xyz completely unrelated question",
+        store=store,
+        top_k=3,
+    )
+
+    assert isinstance(response, str)
+    assert response.strip() != ""

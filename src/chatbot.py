@@ -163,3 +163,31 @@ def no_context_response() -> str:
         "the available Boma Yetu knowledge base to answer "
         "that question accurately."
     )
+
+def answer_from_knowledge(
+    question: str,
+    store,
+    top_k: int = 3,
+) -> str:
+    """
+    Retrieve relevant Boma Yangu knowledge and build
+    a response using the existing chatbot logic.
+    """
+
+    from src.pipeline import search_knowledge
+
+    validate_question(question)
+
+    documents = search_knowledge(
+        query=question,
+        store=store,
+        top_k=top_k,
+    )
+
+    if not documents:
+        return no_context_response()
+
+    return build_prompt(
+        question=question,
+        documents=documents,
+    )
