@@ -2,14 +2,41 @@
 api.py
 ------
 
-API layer for the Boma Yetu AI Assistant.
+FastAPI interface for the Boma Yetu AI Assistant.
 
-This module exposes HTTP endpoints that allow external
-applications to communicate with the chatbot.
+Architecture:
+
+HTTP Request
+    ↓
+FastAPI
+    ↓
+RAG Retrieval
+    ↓
+Prompt Construction
+    ↓
+OpenAI LLM
+    ↓
+Answer
 """
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+
+from src.chatbot import answer_with_llm
+from src.pipeline import process_pdf_directory
+from src.vector_store import VectorStore
+
+
+# ============================================================
+# CREATE KNOWLEDGE STORE
+# ============================================================
+
+knowledge_store = VectorStore()
+
+process_pdf_directory(
+    "data/pdfs",
+    knowledge_store,
+)
 
 
 # ============================================================
@@ -84,10 +111,8 @@ def health_check():
 @app.post("/chat", response_model=ChatResponse)
 def chat(request: ChatRequest):
     """
-    Receive a user's question.
-
-    The actual chatbot/RAG/LLM connection will be added
-    after the API structure has been tested.
+    Receive a user's question and generate
+    a grounded answer using the RAG + LLM pipeline.
     """
 
     question = request.question.strip()
@@ -98,11 +123,19 @@ def chat(request: ChatRequest):
             detail="Question cannot be empty.",
         )
 
-    # Temporary response while the chatbot is being connected.
-    answer = (
-        f"Received your question: {question}"
-    )
+    try:
+        answer = answer_with_llm(
+            question=question,
+            store=knowledge_store,
+            top_k=3,
+        )
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unable to generate answer: {exc}",
+        ) from exc
 
     return ChatResponse(
-        answer=answer
+        answer=answer,
     )

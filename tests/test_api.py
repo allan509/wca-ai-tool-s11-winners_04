@@ -66,10 +66,30 @@ def test_health_check():
 # TEST CHAT ENDPOINT
 # ============================================================
 
-def test_chat():
+def test_chat(monkeypatch):
     """
-    Test that the chat endpoint accepts a valid question.
+    Test that the chat endpoint accepts a valid question
+    and passes it to the chatbot.
     """
+
+    def fake_answer_with_llm(
+        question,
+        store,
+        top_k=3,
+    ):
+        assert question == "Who can register for Boma Yangu?"
+        assert store is not None
+        assert top_k == 3
+
+        return (
+            "Based on the Boma Yangu knowledge base, "
+            "eligible Kenyan citizens can register."
+        )
+
+    monkeypatch.setattr(
+        "src.api.answer_with_llm",
+        fake_answer_with_llm,
+    )
 
     response = client.post(
         "/chat",
@@ -86,7 +106,10 @@ def test_chat():
 
     assert (
         data["answer"]
-        == "Received your question: Who can register for Boma Yangu?"
+        == (
+            "Based on the Boma Yangu knowledge base, "
+            "eligible Kenyan citizens can register."
+        )
     )
 
 

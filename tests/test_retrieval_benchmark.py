@@ -3,15 +3,27 @@ Real-corpus retrieval benchmark for the Boma Yetu AI Assistant.
 
 These tests evaluate retrieval quality against the actual 38-PDF
 knowledge base rather than small synthetic test documents.
+
+The complete knowledge store is built once per test module to avoid
+reprocessing the 38-PDF corpus for every individual test.
 """
+
+import pytest
 
 from src.pipeline import process_pdf_directory
 from src.retrieval import retrieve_documents
 from src.vector_store import VectorStore
 
 
-def build_knowledge_store():
-    """Build a VectorStore from the complete Boma Yetu PDF corpus."""
+@pytest.fixture(scope="module")
+def knowledge_store():
+    """
+    Build the complete Boma Yetu knowledge store once.
+
+    The module-scoped fixture allows all tests in this file to share
+    the same 193-chunk knowledge store instead of rebuilding it for
+    every test.
+    """
 
     store = VectorStore()
 
@@ -23,22 +35,18 @@ def build_knowledge_store():
     return store
 
 
-def test_full_corpus_size():
+def test_full_corpus_size(knowledge_store):
     """Confirm that the complete corpus is loaded."""
 
-    store = build_knowledge_store()
-
-    assert store.count() == 193
+    assert knowledge_store.count() == 193
 
 
-def test_kiambu_project_retrieval():
+def test_kiambu_project_retrieval(knowledge_store):
     """Kiambu project query should retrieve the dedicated project document."""
-
-    store = build_knowledge_store()
 
     results = retrieve_documents(
         "Kiambu County land bank",
-        store,
+        knowledge_store,
         top_k=3,
     )
 
@@ -53,14 +61,12 @@ def test_kiambu_project_retrieval():
     )
 
 
-def test_nyanza_project_retrieval():
+def test_nyanza_project_retrieval(knowledge_store):
     """Nyanza/Rift/Western query should retrieve its project document."""
-
-    store = build_knowledge_store()
 
     results = retrieve_documents(
         "Nyanza Rift Western housing projects",
-        store,
+        knowledge_store,
         top_k=3,
     )
 
@@ -75,14 +81,12 @@ def test_nyanza_project_retrieval():
     )
 
 
-def test_eligibility_retrieval():
+def test_eligibility_retrieval(knowledge_store):
     """Eligibility questions should retrieve eligibility information."""
-
-    store = build_knowledge_store()
 
     results = retrieve_documents(
         "Who is eligible for the Affordable Housing Programme?",
-        store,
+        knowledge_store,
         top_k=3,
     )
 
@@ -97,14 +101,12 @@ def test_eligibility_retrieval():
     )
 
 
-def test_registration_retrieval():
+def test_registration_retrieval(knowledge_store):
     """Registration questions should retrieve registration information."""
-
-    store = build_knowledge_store()
 
     results = retrieve_documents(
         "How do I register for Boma Yangu?",
-        store,
+        knowledge_store,
         top_k=3,
     )
 
@@ -119,14 +121,12 @@ def test_registration_retrieval():
     )
 
 
-def test_housing_levy_retrieval():
+def test_housing_levy_retrieval(knowledge_store):
     """Housing levy questions should retrieve levy information."""
-
-    store = build_knowledge_store()
 
     results = retrieve_documents(
         "How does the housing levy work?",
-        store,
+        knowledge_store,
         top_k=3,
     )
 
