@@ -31,7 +31,7 @@ from src.vector_store import VectorStore
 # TEST PDF LOCATION
 # ============================================================
 
-TEST_PDF = Path("data/pdfs/About/test.pdf")
+TEST_PDF = Path("tests/fixtures/test.pdf")
 
 
 # ============================================================

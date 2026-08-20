@@ -182,7 +182,7 @@ def test_answer_from_knowledge():
     store = VectorStore()
 
     process_pdf(
-        "data/pdfs/About/test.pdf",
+        "tests/fixtures/test.pdf",
         store,
         document_id="TEST_DOC",
         category="About",

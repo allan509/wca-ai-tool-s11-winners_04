@@ -5,7 +5,7 @@ from src.pipeline import process_pdf
 from src.vector_store import VectorStore
 
 
-TEST_PDF = "data/pdfs/About/test.pdf"
+TEST_PDF = "tests/data/test.pdf"
 
 
 def test_answer_with_llm(monkeypatch):

@@ -1,42 +1,95 @@
 """
 Retrieves information from the document store.
 
-Current version:
-- Uses simple keyword matching.
-- Does not require an embedding model.
-- Does not require an external vector database.
+Retrieval strategy:
+- Weighted keyword matching.
+- IDF-style weighting for distinctive terms.
+- Exact phrase matching bonus.
+- Source/document-name matching bonus.
+- No embedding model required.
+- No external vector database required.
 
-Later:
-- This module can be upgraded to semantic/vector similarity
-  search without changing the chatbot's overall architecture.
+Performance:
+- Query tokens are calculated once.
+- Document tokens are calculated once per retrieval.
+- Document frequencies are calculated once per retrieval.
+- Preprocessed document text is reused during scoring.
 """
 
+import math
 import re
 
 from src.vector_store import DocumentChunk, VectorStore
 
-# Text processing
+
+# ============================================================
+# STOP WORDS
+# ============================================================
+
+STOP_WORDS = {
+    "a",
+    "an",
+    "and",
+    "are",
+    "be",
+    "can",
+    "do",
+    "does",
+    "for",
+    "how",
+    "i",
+    "in",
+    "is",
+    "it",
+    "of",
+    "on",
+    "or",
+    "the",
+    "to",
+    "what",
+    "where",
+    "who",
+    "with",
+    "you",
+}
+
+
+# ============================================================
+# TEXT PROCESSING
+# ============================================================
 
 def tokenize(text: str) -> list[str]:
     """
-    Convert text into lowercase words.
+    Convert text into lowercase word tokens.
 
-    Punctuation is removed so that words can be compared
+    Punctuation is removed so words can be compared
     consistently.
-
-    Args:
-        text: Text to tokenize.
-
-    Returns:
-        A list of lowercase words.
     """
 
     if not isinstance(text, str):
         raise TypeError("text must be a string")
 
-    return re.findall(r"\b\w+\b", text.lower())
+    return re.findall(
+        r"\b\w+\b",
+        text.lower(),
+    )
 
-# Keyword scoring
+
+def meaningful_tokens(text: str) -> list[str]:
+    """
+    Return meaningful tokens after removing stop words.
+    """
+
+    return [
+        token
+        for token in tokenize(text)
+        if token not in STOP_WORDS
+    ]
+
+
+# ============================================================
+# ORIGINAL KEYWORD SCORING
+# ============================================================
 
 def calculate_keyword_score(
     query: str,
@@ -45,20 +98,207 @@ def calculate_keyword_score(
     """
     Calculate how many query words appear in a document.
 
-    Args:
-        query: User's question or search query.
-        text: Document chunk text.
-
-    Returns:
-        Number of matching keywords.
+    Retained for compatibility with existing tests and
+    application code.
     """
 
     query_words = set(tokenize(query))
     text_words = set(tokenize(text))
 
-    return len(query_words.intersection(text_words))
+    return len(
+        query_words.intersection(text_words)
+    )
 
-# Retrieval
+
+# ============================================================
+# DOCUMENT FREQUENCY
+# ============================================================
+
+def calculate_document_frequency(
+    query_tokens: list[str],
+    documents: list[DocumentChunk],
+) -> dict[str, int]:
+    """
+    Calculate how many documents contain each query token.
+
+    Each document contributes at most one occurrence for
+    each token.
+    """
+
+    frequency = {
+        token: 0
+        for token in query_tokens
+    }
+
+    if not query_tokens or not documents:
+        return frequency
+
+    query_token_set = set(query_tokens)
+
+    for document in documents:
+
+        document_tokens = set(
+            meaningful_tokens(document.text)
+        )
+
+        matched_tokens = (
+            query_token_set.intersection(
+                document_tokens
+            )
+        )
+
+        for token in matched_tokens:
+            frequency[token] += 1
+
+    return frequency
+
+
+# ============================================================
+# INTERNAL OPTIMIZED SCORING
+# ============================================================
+
+def _score_document(
+    query_tokens: list[str],
+    normalized_query: str,
+    document: DocumentChunk,
+    document_tokens: set[str],
+    normalized_text: str,
+    frequencies: dict[str, int],
+    total_documents: int,
+) -> float:
+    """
+    Calculate a document relevance score using
+    precomputed values.
+    """
+
+    if not query_tokens:
+        return 0.0
+
+    score = 0.0
+
+    # --------------------------------------------------------
+    # Weighted keyword matching
+    # --------------------------------------------------------
+
+    for token in query_tokens:
+
+        if token not in document_tokens:
+            continue
+
+        document_frequency = frequencies.get(
+            token,
+            0,
+        )
+
+        weight = math.log(
+            (total_documents + 1)
+            / (document_frequency + 1)
+        ) + 1
+
+        score += weight
+
+    # --------------------------------------------------------
+    # Exact phrase bonus
+    # --------------------------------------------------------
+
+    if (
+        normalized_query
+        and normalized_query in normalized_text
+    ):
+        score += 3.0
+
+    # --------------------------------------------------------
+    # Source/document filename bonus
+    # --------------------------------------------------------
+
+    source = str(
+        document.metadata.get(
+            "source",
+            "",
+        )
+    ).lower()
+
+    document_id = str(
+        document.chunk_id
+    ).lower()
+
+    searchable_metadata = (
+        source
+        + " "
+        + document_id
+    )
+
+    for token in query_tokens:
+
+        if token in searchable_metadata:
+            score += 1.5
+
+    return score
+
+
+# ============================================================
+# PUBLIC RELEVANCE SCORE
+# ============================================================
+
+def calculate_relevance_score(
+    query: str,
+    document: DocumentChunk,
+    documents: list[DocumentChunk],
+) -> float:
+    """
+    Calculate a weighted relevance score.
+
+    This public function retains the original interface.
+
+    For repeated scoring across a corpus, retrieve_documents()
+    uses the optimized cached scoring path.
+    """
+
+    query_tokens = list(
+        dict.fromkeys(
+            meaningful_tokens(query)
+        )
+    )
+
+    if not query_tokens:
+        return 0.0
+
+    document_tokens = set(
+        meaningful_tokens(document.text)
+    )
+
+    normalized_query = " ".join(
+        query_tokens
+    )
+
+    normalized_text = " ".join(
+        meaningful_tokens(document.text)
+    )
+
+    frequencies = calculate_document_frequency(
+        query_tokens,
+        documents,
+    )
+
+    total_documents = max(
+        len(documents),
+        1,
+    )
+
+    return _score_document(
+        query_tokens=query_tokens,
+        normalized_query=normalized_query,
+        document=document,
+        document_tokens=document_tokens,
+        normalized_text=normalized_text,
+        frequencies=frequencies,
+        total_documents=total_documents,
+    )
+
+
+# ============================================================
+# RETRIEVAL
+# ============================================================
 
 def retrieve_documents(
     query: str,
@@ -68,42 +308,112 @@ def retrieve_documents(
     """
     Retrieve the most relevant document chunks.
 
-    The current implementation ranks chunks according to
-    the number of keywords they share with the query.
-
-    Args:
-        query:
-            User's question or search query.
-
-        store:
-            VectorStore containing document chunks.
-
-        top_k:
-            Maximum number of results to return.
-
-    Returns:
-        List of the most relevant DocumentChunk objects.
+    The corpus is tokenized once per retrieval operation,
+    document frequencies are calculated once, and the cached
+    values are reused while scoring every document.
     """
 
+    # --------------------------------------------------------
+    # Validate input
+    # --------------------------------------------------------
+
     if not isinstance(query, str):
-        raise TypeError("query must be a string")
+        raise TypeError(
+            "query must be a string"
+        )
 
     if not query.strip():
         return []
 
     if not isinstance(store, VectorStore):
-        raise TypeError("store must be a VectorStore")
+        raise TypeError(
+            "store must be a VectorStore"
+        )
 
     if top_k <= 0:
-        raise ValueError("top_k must be greater than 0")
+        raise ValueError(
+            "top_k must be greater than 0"
+        )
+
+    # --------------------------------------------------------
+    # Load documents
+    # --------------------------------------------------------
+
+    documents = store.get_all_documents()
+
+    if not documents:
+        return []
+
+    # --------------------------------------------------------
+    # Process query once
+    # --------------------------------------------------------
+
+    query_tokens = list(
+        dict.fromkeys(
+            meaningful_tokens(query)
+        )
+    )
+
+    if not query_tokens:
+        return []
+
+    normalized_query = " ".join(
+        query_tokens
+    )
+
+    # --------------------------------------------------------
+    # Preprocess documents once
+    # --------------------------------------------------------
+
+    document_cache = {}
+
+    for document in documents:
+
+        meaningful = meaningful_tokens(
+            document.text
+        )
+
+        document_cache[
+            document.chunk_id
+        ] = {
+            "tokens": set(meaningful),
+            "text": " ".join(meaningful),
+        }
+
+    # --------------------------------------------------------
+    # Calculate document frequencies once
+    # --------------------------------------------------------
+
+    frequencies = calculate_document_frequency(
+        query_tokens,
+        documents,
+    )
+
+    total_documents = max(
+        len(documents),
+        1,
+    )
+
+    # --------------------------------------------------------
+    # Score documents
+    # --------------------------------------------------------
 
     scored_documents = []
 
-    for document in store.get_all_documents():
+    for document in documents:
 
-        score = calculate_keyword_score(
-            query,
-            document.text,
+        cached = document_cache[
+            document.chunk_id
+        ]
+
+        score = _score_document(
+            query_tokens=query_tokens,
+            normalized_query=normalized_query,
+            document=document,
+            document_tokens=cached["tokens"],
+            normalized_text=cached["text"],
+            frequencies=frequencies,
+            total_documents=total_documents,
         )
 
         if score > 0:
@@ -111,14 +421,21 @@ def retrieve_documents(
                 (score, document)
             )
 
-    # Highest score first.
+    # --------------------------------------------------------
+    # Sort by relevance
+    # --------------------------------------------------------
+
     scored_documents.sort(
         key=lambda item: item[0],
         reverse=True,
     )
 
-    # Return only the requested number of documents.
+    # --------------------------------------------------------
+    # Return top results
+    # --------------------------------------------------------
+
     return [
         document
-        for score, document in scored_documents[:top_k]
+        for score, document
+        in scored_documents[:top_k]
     ]
