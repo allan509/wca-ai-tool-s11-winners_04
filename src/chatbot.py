@@ -32,6 +32,15 @@ Rules:
    clearly say that the available information is insufficient.
 4. Keep answers clear and easy to understand.
 5. When appropriate, mention the source of the information.
+6. For factual questions, include all important relevant facts
+   contained in the provided context.
+7. For contact-information questions, include all official
+   contact details found in the context, including phone numbers,
+   email addresses, USSD codes, websites, and other support
+   channels.
+8. Do not omit relevant contact details from the context.
+9. Do not invent or substitute contact information that is not
+   present in the provided context.
 """
 
 # Input validation
@@ -191,3 +200,55 @@ def answer_from_knowledge(
         question=question,
         documents=documents,
     )
+
+def answer_with_llm(
+    question: str,
+    store,
+    top_k: int = 3,
+) -> str:
+    """
+    Generate an LLM-powered answer using retrieved
+    Boma Yetu knowledge.
+
+    The function:
+    1. Validates the question.
+    2. Retrieves relevant knowledge.
+    3. Builds a grounded prompt.
+    4. Sends the prompt to the configured LLM.
+    5. Returns the generated response.
+
+    Args:
+        question:
+            User's question.
+
+        store:
+            VectorStore containing the knowledge base.
+
+        top_k:
+            Maximum number of retrieved chunks.
+
+    Returns:
+        Generated answer string, or a safe fallback when
+        no relevant knowledge is found.
+    """
+
+    from src.llm import generate_response
+    from src.pipeline import search_knowledge
+
+    question = validate_question(question)
+
+    documents = search_knowledge(
+        query=question,
+        store=store,
+        top_k=top_k,
+    )
+
+    if not documents:
+        return no_context_response()
+
+    prompt = build_prompt(
+        question=question,
+        documents=documents,
+    )
+
+    return generate_response(prompt)

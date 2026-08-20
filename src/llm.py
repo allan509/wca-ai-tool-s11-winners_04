@@ -8,7 +8,10 @@ and the language model API.
 
 import os
 
+from dotenv import load_dotenv
 from openai import OpenAI
+
+load_dotenv()
 
 
 DEFAULT_MODEL = "gpt-5-mini"

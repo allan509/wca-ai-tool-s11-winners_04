@@ -21,7 +21,7 @@ def test_find_pdf_files():
 def test_extract_text_from_pdf():
     """Check that text can be extracted from a PDF."""
 
-    test_pdf = PDF_DIR / "About" / "test.pdf"
+    test_pdf = Path("tests/fixtures/test.pdf")
 
     text = extract_text_from_pdf(test_pdf)
 
