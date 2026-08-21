@@ -122,11 +122,73 @@ def format_context(
 
     return "\n\n".join(context_parts)
 
+def format_conversation_history(
+    messages: list[dict],
+) -> str:
+    """
+    Format previous conversation messages so they can
+    be supplied to the language model.
+
+    Args:
+        messages:
+            Conversation history containing user and
+            assistant messages.
+
+    Returns:
+        Formatted conversation history.
+    """
+
+    if not isinstance(messages, list):
+        raise TypeError(
+            "messages must be a list"
+        )
+
+    if not messages:
+        return "No previous conversation."
+
+    history_parts = []
+
+    for message in messages:
+
+        if not isinstance(message, dict):
+            raise TypeError(
+                "each message must be a dictionary"
+            )
+
+        role = message.get("role")
+        content = message.get("content")
+
+        if role not in (
+            "user",
+            "assistant",
+        ):
+            raise ValueError(
+                "message role must be 'user' or 'assistant'"
+            )
+
+        if not isinstance(content, str):
+            raise TypeError(
+                "message content must be a string"
+            )
+
+        label = (
+            "User"
+            if role == "user"
+            else "Assistant"
+        )
+
+        history_parts.append(
+            f"{label}: {content}"
+        )
+
+    return "\n\n".join(history_parts)
+
 # Prompt building
 
 def build_prompt(
     question: str,
     documents: list[DocumentChunk],
+    conversation_history: list[dict] | None = None,
 ) -> str:
     """
     Build the complete prompt that will eventually be sent
@@ -146,14 +208,19 @@ def build_prompt(
     question = validate_question(question)
 
     context = format_context(documents)
+    history = format_conversation_history(
+    conversation_history or []
+    )
 
     prompt = (
-        f"{SYSTEM_INSTRUCTIONS.strip()}\n\n"
-        f"CONTEXT:\n"
-        f"{context}\n\n"
-        f"USER QUESTION:\n"
-        f"{question}\n\n"
-        f"ANSWER:"
+    f"{SYSTEM_INSTRUCTIONS.strip()}\n\n"
+    f"CONVERSATION HISTORY:\n"
+    f"{history}\n\n"
+    f"RELEVANT KNOWLEDGE:\n"
+    f"{context}\n\n"
+    f"CURRENT USER QUESTION:\n"
+    f"{question}\n\n"
+    f"ANSWER:"
     )
 
     return prompt
@@ -205,6 +272,7 @@ def answer_with_llm(
     question: str,
     store,
     top_k: int = 3,
+    conversation_history: list[dict] | None = None,
 ) -> str:
     """
     Generate an LLM-powered answer using retrieved
@@ -247,8 +315,9 @@ def answer_with_llm(
         return no_context_response()
 
     prompt = build_prompt(
-        question=question,
-        documents=documents,
+    question=question,
+    documents=documents,
+    conversation_history=conversation_history,
     )
 
     return generate_response(prompt)

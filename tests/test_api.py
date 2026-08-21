@@ -76,10 +76,12 @@ def test_chat(monkeypatch):
         question,
         store,
         top_k=3,
+        conversation_history=None,
     ):
         assert question == "Who can register for Boma Yangu?"
         assert store is not None
         assert top_k == 3
+        assert conversation_history is not None
 
         return (
             "Based on the Boma Yangu knowledge base, "
@@ -152,3 +154,109 @@ def test_missing_question():
     )
 
     assert response.status_code == 422
+
+def test_chat_conversation_memory(monkeypatch):
+    """
+    Test that two requests using the same conversation_id
+    share conversation memory.
+    """
+
+    captured_histories = []
+
+    def fake_answer_with_llm(
+        question,
+        store,
+        top_k=3,
+        conversation_history=None,
+    ):
+        captured_histories.append(
+            conversation_history
+        )
+
+        if question == "What is Boma Yangu?":
+            return "Boma Yangu is an affordable housing programme."
+
+        if question == "How do I register?":
+            assert conversation_history is not None
+
+            assert any(
+                message["role"] == "user"
+                and message["content"] == "What is Boma Yangu?"
+                for message in conversation_history
+            )
+
+            assert any(
+                message["role"] == "assistant"
+                and message["content"]
+                == "Boma Yangu is an affordable housing programme."
+                for message in conversation_history
+            )
+
+            return "You can register through the Boma Yangu portal."
+
+        return "Unexpected question."
+
+    monkeypatch.setattr(
+        "src.api.answer_with_llm",
+        fake_answer_with_llm,
+    )
+
+    # --------------------------------------------------------
+    # First question
+    # --------------------------------------------------------
+
+    first_response = client.post(
+        "/chat",
+        json={
+            "question": "What is Boma Yangu?"
+        },
+    )
+
+    assert first_response.status_code == 200
+
+    first_data = first_response.json()
+
+    assert "answer" in first_data
+    assert "conversation_id" in first_data
+
+    conversation_id = first_data["conversation_id"]
+
+    assert conversation_id
+
+    # --------------------------------------------------------
+    # Second question using the same conversation
+    # --------------------------------------------------------
+
+    second_response = client.post(
+        "/chat",
+        json={
+            "question": "How do I register?",
+            "conversation_id": conversation_id,
+        },
+    )
+
+    assert second_response.status_code == 200
+
+    second_data = second_response.json()
+
+    assert (
+        second_data["answer"]
+        == "You can register through the Boma Yangu portal."
+    )
+
+    assert (
+        second_data["conversation_id"]
+        == conversation_id
+    )
+
+    # --------------------------------------------------------
+    # Confirm both calls were made
+    # --------------------------------------------------------
+
+    assert len(captured_histories) == 2
+
+    # First request has no previous conversation.
+    assert captured_histories[0] == []
+
+    # Second request has the first exchange.
+    assert len(captured_histories[1]) == 2

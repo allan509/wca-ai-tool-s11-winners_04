@@ -25,7 +25,8 @@ from pydantic import BaseModel
 from src.chatbot import answer_with_llm
 from src.pipeline import process_pdf_directory
 from src.vector_store import VectorStore
-
+from src.memory import MemoryManager
+from uuid import uuid4
 
 # ============================================================
 # CREATE KNOWLEDGE STORE
@@ -37,7 +38,10 @@ process_pdf_directory(
     "data/pdfs",
     knowledge_store,
 )
-
+# Creat conversation memory
+memory_manager = MemoryManager(
+    max_messages=20
+)
 
 # ============================================================
 # CREATE FASTAPI APPLICATION
@@ -55,12 +59,10 @@ app = FastAPI(
 # ============================================================
 
 class ChatRequest(BaseModel):
-    """
-    Represents a question sent by the user.
-    """
 
     question: str
 
+    conversation_id: str | None = None
 
 # ============================================================
 # RESPONSE MODEL
@@ -72,6 +74,7 @@ class ChatResponse(BaseModel):
     """
 
     answer: str
+    conversation_id: str
 
 
 # ============================================================
@@ -110,10 +113,6 @@ def health_check():
 
 @app.post("/chat", response_model=ChatResponse)
 def chat(request: ChatRequest):
-    """
-    Receive a user's question and generate
-    a grounded answer using the RAG + LLM pipeline.
-    """
 
     question = request.question.strip()
 
@@ -123,19 +122,37 @@ def chat(request: ChatRequest):
             detail="Question cannot be empty.",
         )
 
+    conversation_id = (
+        request.conversation_id
+        or str(uuid4())
+    )
+
+    memory = memory_manager.get_or_create(
+        conversation_id
+    )
+
     try:
+
+        
         answer = answer_with_llm(
             question=question,
             store=knowledge_store,
             top_k=3,
+        conversation_history=memory.get_messages(),
         )
+        
 
     except Exception as exc:
+
         raise HTTPException(
             status_code=500,
             detail=f"Unable to generate answer: {exc}",
         ) from exc
 
+    memory.add_user_message(question)
+    memory.add_assistant_message(answer)
+
     return ChatResponse(
         answer=answer,
+        conversation_id=conversation_id,
     )
