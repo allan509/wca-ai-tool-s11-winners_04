@@ -337,3 +337,34 @@ def test_clear_empty_memory():
     memory.clear()
 
     assert memory.count() == 0
+def test_conversation_history_is_used_in_prompt():
+    from src.chatbot import build_prompt
+
+    history = [
+        {
+            "role": "user",
+            "content": (
+                "What housing projects are available in Kiambu?"
+            ),
+        },
+        {
+            "role": "assistant",
+            "content": (
+                "Projects include developments in Kikuyu and Ruiru."
+            ),
+        },
+    ]
+
+    prompt = build_prompt(
+        question="Which one is in Kikuyu?",
+        documents=[],
+        conversation_history=history,
+    )
+
+    assert "CONVERSATION HISTORY:" in prompt
+    assert "What housing projects are available in Kiambu?" in prompt
+    assert (
+        "Projects include developments in Kikuyu and Ruiru."
+        in prompt
+    )
+    assert "Which one is in Kikuyu?" in prompt    

@@ -26,8 +26,8 @@ def test_answer_with_llm(monkeypatch):
     def fake_generate_response(prompt):
         assert isinstance(prompt, str)
         assert "What is Boma Yangu?" in prompt
-        assert "CONTEXT:" in prompt
-        assert "USER QUESTION:" in prompt
+        assert "RELEVANT KNOWLEDGE:" in prompt
+        assert "CURRENT USER QUESTION:" in prompt
 
         return "This is a mocked Boma Yangu response."
 
